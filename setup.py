@@ -13,12 +13,12 @@ def read(fname):
 
 
 install_requires = [
-    'Django>=1.11',
+    'Django>=2.2',
 ]
 
 setup(
     name='django-authtools',
-    version='1.8.0.dev0',
+    version='2.0.0.dev0',
     author='Fusionbox, Inc.',
     author_email='programmers@fusionbox.com',
     description=__doc__,
@@ -37,9 +37,10 @@ setup(
         'License :: OSI Approved :: BSD License',
         'Natural Language :: English',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
     ],
 )

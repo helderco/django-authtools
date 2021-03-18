@@ -4,7 +4,8 @@ CHANGES
 2.0.0 (unreleased)
 ------------------
 
-- ** BREAKING ** Drop support for Django versions earlier than 2.0
+- ** BREAKING ** Drop support for Django versions earlier than 2.2 and Python 2.7
+- Add support for Django 3.x
 - Fix bug where request is not properly set on AuthenticationForm (#102)
 - Fix bug where request not passed through on PasswordResetConfirmAndLoginView (#103)
 - Make UserAdmin compatible with Django 2.0

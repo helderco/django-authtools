@@ -3,8 +3,6 @@ import os
 import sys
 import warnings
 
-import django
-
 warnings.simplefilter('error')
 
 if __name__ == "__main__":

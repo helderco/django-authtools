@@ -1,8 +1,4 @@
-from __future__ import print_function
-
 import os
-
-from django import VERSION as DJANGO_VERSION
 
 SECRET_KEY = 'w6bidenrf5q%byf-q82b%pli50i0qmweus6gt_3@k$=zg7ymd3'
 SITE_ID = 1
@@ -14,6 +10,7 @@ INSTALLED_APPS = (
     'django.contrib.admin',
     'django.contrib.staticfiles',
     'django.contrib.sites',
+    'django.contrib.messages',
     'tests',
     'authtools',
     'auth_tests',
@@ -26,12 +23,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
 ]
-
-if DJANGO_VERSION < (1, 10):
-    MIDDLEWARE_CLASSES = MIDDLEWARE + [
-        'django.contrib.auth.middleware.SessionAuthenticationMiddleware',
-    ]
-
 
 DATABASES = {
     'default': {
@@ -61,6 +52,8 @@ TEMPLATES = [
         'OPTIONS': {
             'context_processors': [
                 'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.request',
             ],
         },
     },

@@ -2,7 +2,6 @@
 Mostly equivalent to the views from django.contrib.auth.views, but
 implemented as class-based views.
 """
-from __future__ import unicode_literals
 import warnings
 
 from django.conf import settings
@@ -11,7 +10,7 @@ from django.contrib.auth import (
     REDIRECT_FIELD_NAME, login as auth_login
 )
 from django.contrib.auth.views import (
-    SuccessURLAllowedHostsMixin, INTERNAL_RESET_URL_TOKEN,
+    SuccessURLAllowedHostsMixin,
     INTERNAL_RESET_SESSION_TOKEN
 )
 from django.contrib.auth.decorators import login_required
@@ -27,34 +26,27 @@ from django.contrib.sites.shortcuts import get_current_site
 
 from django.shortcuts import redirect, resolve_url
 from django.utils.functional import lazy
-from django.utils.http import base36_to_int, is_safe_url, urlsafe_base64_decode
-from django.utils import six
+from django.utils.http import urlsafe_base64_decode
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.generic import FormView, TemplateView, RedirectView
-from django import VERSION as DJANGO_VERSION
+
+try:
+    from django.utils.http import url_has_allowed_host_and_scheme as is_safe_url
+except ImportError:
+    # Django <3
+    from django.utils.http import is_safe_url
 
 from .forms import AuthenticationForm
 
 User = get_user_model()
 
 
-def _safe_resolve_url(url):
-    """
-    Previously, resolve_url_lazy would fail if the url was a unicode object.
-    See <https://github.com/fusionbox/django-authtools/issues/13> for more
-    information.
-
-    Thanks to GitHub user alanwj for pointing out the problem and providing
-    this solution.
-    """
-    return six.text_type(resolve_url(url))
-
-resolve_url_lazy = lazy(_safe_resolve_url, six.text_type)
+resolve_url_lazy = lazy(resolve_url, str)
 
 
-class WithCurrentSiteMixin(object):
+class WithCurrentSiteMixin:
     def get_current_site(self):
         return get_current_site(self.request)
 
@@ -68,7 +60,7 @@ class WithCurrentSiteMixin(object):
         return kwargs
 
 
-class WithNextUrlMixin(object):
+class WithNextUrlMixin:
     redirect_field_name = REDIRECT_FIELD_NAME
     success_url = None
 
@@ -124,7 +116,7 @@ def DecoratorMixin(decorator):
 
     """
 
-    class Mixin(object):
+    class Mixin:
         __doc__ = decorator.__doc__
 
         @classmethod
@@ -256,35 +248,29 @@ class PasswordChangeDoneView(LoginRequiredMixin, TemplateView):
 
 
 class PasswordResetView(CsrfProtectMixin, FormView):
+    email_template_name = 'registration/password_reset_email.html'
+    extra_email_context = None
+    form_class = PasswordResetForm
+    from_email = None
+    html_email_template_name = None
+    subject_template_name = 'registration/password_reset_subject.txt'
+    success_url = reverse_lazy('password_reset_done')
     template_name = 'registration/password_reset_form.html'
     token_generator = default_token_generator
-    success_url = reverse_lazy('password_reset_done')
-    domain_override = None
-    subject_template_name = 'registration/password_reset_subject.txt'
-    email_template_name = 'registration/password_reset_email.html'
-    html_email_template_name = None
-    from_email = None
-    form_class = PasswordResetForm
-    extra_email_context = None
 
     def form_valid(self, form):
-        kwargs = dict(
-            domain_override=self.domain_override,
-            subject_template_name=self.subject_template_name,
-            email_template_name=self.email_template_name,
-            token_generator=self.token_generator,
-            from_email=self.from_email,
-            request=self.request,
-            use_https=self.request.is_secure(),
-            html_email_template_name=self.html_email_template_name,
-        )
-
-        if DJANGO_VERSION[:2] >= (1, 9):
-            kwargs['extra_email_context'] = self.extra_email_context
-
-        form.save(**kwargs)
-
-        return super(PasswordResetView, self).form_valid(form)
+        opts = {
+            'use_https': self.request.is_secure(),
+            'token_generator': self.token_generator,
+            'from_email': self.from_email,
+            'email_template_name': self.email_template_name,
+            'subject_template_name': self.subject_template_name,
+            'request': self.request,
+            'html_email_template_name': self.html_email_template_name,
+            'extra_email_context': self.extra_email_context,
+        }
+        form.save(**opts)
+        return super().form_valid(form)
 
 
 class PasswordResetDoneView(TemplateView):
@@ -295,6 +281,7 @@ class PasswordResetConfirmView(AuthDecoratorsMixin, FormView):
     template_name = 'registration/password_reset_confirm.html'
     token_generator = default_token_generator
     form_class = SetPasswordForm
+    reset_url_token = 'set-password'
     success_url = reverse_lazy('password_reset_complete')
     post_reset_login = False
     post_reset_login_backend = None
@@ -307,7 +294,7 @@ class PasswordResetConfirmView(AuthDecoratorsMixin, FormView):
         if self.user is not None:
             # Most of this is copied from django
             token = kwargs['token']
-            if token == INTERNAL_RESET_URL_TOKEN:
+            if token == self.reset_url_token:
                 session_token = self.request.session.get(INTERNAL_RESET_SESSION_TOKEN)
                 if self.token_generator.check_token(self.user, session_token):
                     # If the token is valid, display the password reset form.
@@ -320,7 +307,7 @@ class PasswordResetConfirmView(AuthDecoratorsMixin, FormView):
                     # avoids the possibility of leaking the token in the
                     # HTTP Referer header.
                     self.request.session[INTERNAL_RESET_SESSION_TOKEN] = token
-                    redirect_url = self.request.path.replace(token, INTERNAL_RESET_URL_TOKEN)
+                    redirect_url = self.request.path.replace(token, self.reset_url_token)
                     return HttpResponseRedirect(redirect_url)
 
         return super(PasswordResetConfirmView, self).dispatch(*args, **kwargs)

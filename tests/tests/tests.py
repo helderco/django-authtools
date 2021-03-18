@@ -2,7 +2,7 @@
 We're able to borrow most of django's auth view tests.
 
 """
-import collections
+from collections import abc
 import contextlib
 import itertools
 import warnings
@@ -10,18 +10,18 @@ import warnings
 import datetime
 
 from unittest import skipIf, skipUnless
+from urllib.parse import quote
 
 from django.core import mail
 from django.urls import reverse
 
 from django.contrib.auth import REDIRECT_FIELD_NAME, get_user_model, SESSION_KEY
 from django.contrib.auth.forms import AuthenticationForm
-from django.utils.http import urlquote
 from django.test import TestCase
 from django.test.client import RequestFactory
 from django.test.utils import override_settings
-from django.utils.encoding import force_text
-from django.utils.translation import ugettext as _
+from django.utils.encoding import force_str
+from django.utils.translation import gettext as _
 from django.forms.fields import Field
 from django.conf import settings
 from django.http import HttpRequest
@@ -72,10 +72,10 @@ def skipIfCustomUser(test_func):
     return skipIf(settings.AUTH_USER_MODEL != 'auth.User', 'Custom user model in use')(test_func)
 
 
-class WarningTestMixin(object):
+class WarningTestMixin:
     @contextlib.contextmanager
     def assertWarns(self, warning_classes):
-        if not isinstance(warning_classes, collections.Iterable):
+        if not isinstance(warning_classes, abc.Iterable):
             warning_classes = [warning_classes]
 
         with warnings.catch_warnings(record=True) as warn:
@@ -86,14 +86,8 @@ class WarningTestMixin(object):
                 assert issubclass(msg.category, expected_class)
 
 
-class EmailLoginMixin(object):
+class EmailLoginMixin:
     if settings.AUTH_USER_MODEL != 'auth.User':
-        if DJANGO_VERSION[:2] < (1, 9):
-            if settings.AUTH_USER_MODEL == 'authtools.User':
-                fixtures = ['authtoolstestdata.json']
-            elif settings.AUTH_USER_MODEL == 'tests.User':
-                fixtures = ['customusertestdata.json']
-
         def login(self, username='testclient', password='password'):
             """
             Authtools uses email addresses to login.
@@ -107,93 +101,88 @@ class EmailLoginMixin(object):
             return super(EmailLoginMixin, self).login(username, password)
 
 
-class AuthViewsTestCaseDataMixin(object):
+class AuthViewsTestCaseDataMixin:
     """
     Helper base class for all the follow test cases.
     """
 
-    if DJANGO_VERSION[:2] >= (1, 9):
-        @classmethod
-        def setUpTestData(cls):
-            if settings.AUTH_USER_MODEL == 'auth.User':
-                cls.u1 = User.objects.create(
-                    password='sha1$6efc0$f93efe9fd7542f25a7be94871ea45aa95de57161',
-                    last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False, username='testclient',
-                    first_name='Test', last_name='Client', email='testclient@example.com', is_staff=False, is_active=True,
-                    date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
-                )
-                cls.u2 = User.objects.create(
-                    password='sha1$6efc0$f93efe9fd7542f25a7be94871ea45aa95de57161',
-                    last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False, username='inactive',
-                    first_name='Inactive', last_name='User', email='testclient2@example.com', is_staff=False, is_active=False,
-                    date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
-                )
-                cls.u3 = User.objects.create(
-                    password='sha1$6efc0$f93efe9fd7542f25a7be94871ea45aa95de57161',
-                    last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False, username='staff',
-                    first_name='Staff', last_name='Member', email='staffmember@example.com', is_staff=True, is_active=True,
-                    date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
-                )
-                cls.u4 = User.objects.create(
-                    password='', last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
-                    username='empty_password', first_name='Empty', last_name='Password', email='empty_password@example.com',
-                    is_staff=False, is_active=True, date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
-                )
-                cls.u5 = User.objects.create(
-                    password='$', last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
-                    username='unmanageable_password', first_name='Unmanageable', last_name='Password',
-                    email='unmanageable_password@example.com', is_staff=False, is_active=True,
-                    date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
-                )
-                cls.u6 = User.objects.create(
-                    password='foo$bar', last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
-                    username='unknown_password', first_name='Unknown', last_name='Password',
-                    email='unknown_password@example.com', is_staff=False, is_active=True,
-                    date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
-                )
-            else:
-                cls.u1 = User.objects.create(
-                    password='sha1$6efc0$f93efe9fd7542f25a7be94871ea45aa95de57161',
-                    last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
-                    email='testclient@example.com', is_staff=False, is_active=True,
-                    date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
-                )
-                cls.u2 = User.objects.create(
-                    password='sha1$6efc0$f93efe9fd7542f25a7be94871ea45aa95de57161',
-                    last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
-                    email='testclient2@example.com', is_staff=False, is_active=False,
-                    date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
-                )
-                cls.u3 = User.objects.create(
-                    password='sha1$6efc0$f93efe9fd7542f25a7be94871ea45aa95de57161',
-                    last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
-                    email='staffmember@example.com', is_staff=True, is_active=True,
-                    date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
-                )
-                cls.u4 = User.objects.create(
-                    password='', last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
-                    email='empty_password@example.com',
-                    is_staff=False, is_active=True, date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
-                )
-                cls.u5 = User.objects.create(
-                    password='$', last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
-                    email='unmanageable_password@example.com', is_staff=False, is_active=True,
-                    date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
-                )
-                cls.u6 = User.objects.create(
-                    password='foo$bar', last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
-                    email='unknown_password@example.com', is_staff=False, is_active=True,
-                    date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
-                )
+    @classmethod
+    def setUpTestData(cls):
+        if settings.AUTH_USER_MODEL == 'auth.User':
+            cls.u1 = User.objects.create(
+                password='sha1$6efc0$f93efe9fd7542f25a7be94871ea45aa95de57161',
+                last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False, username='testclient',
+                first_name='Test', last_name='Client', email='testclient@example.com', is_staff=False, is_active=True,
+                date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
+            )
+            cls.u2 = User.objects.create(
+                password='sha1$6efc0$f93efe9fd7542f25a7be94871ea45aa95de57161',
+                last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False, username='inactive',
+                first_name='Inactive', last_name='User', email='testclient2@example.com', is_staff=False, is_active=False,
+                date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
+            )
+            cls.u3 = User.objects.create(
+                password='sha1$6efc0$f93efe9fd7542f25a7be94871ea45aa95de57161',
+                last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False, username='staff',
+                first_name='Staff', last_name='Member', email='staffmember@example.com', is_staff=True, is_active=True,
+                date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
+            )
+            cls.u4 = User.objects.create(
+                password='', last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
+                username='empty_password', first_name='Empty', last_name='Password', email='empty_password@example.com',
+                is_staff=False, is_active=True, date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
+            )
+            cls.u5 = User.objects.create(
+                password='$', last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
+                username='unmanageable_password', first_name='Unmanageable', last_name='Password',
+                email='unmanageable_password@example.com', is_staff=False, is_active=True,
+                date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
+            )
+            cls.u6 = User.objects.create(
+                password='foo$bar', last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
+                username='unknown_password', first_name='Unknown', last_name='Password',
+                email='unknown_password@example.com', is_staff=False, is_active=True,
+                date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
+            )
+        else:
+            cls.u1 = User.objects.create(
+                password='sha1$6efc0$f93efe9fd7542f25a7be94871ea45aa95de57161',
+                last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
+                email='testclient@example.com', is_staff=False, is_active=True,
+                date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
+            )
+            cls.u2 = User.objects.create(
+                password='sha1$6efc0$f93efe9fd7542f25a7be94871ea45aa95de57161',
+                last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
+                email='testclient2@example.com', is_staff=False, is_active=False,
+                date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
+            )
+            cls.u3 = User.objects.create(
+                password='sha1$6efc0$f93efe9fd7542f25a7be94871ea45aa95de57161',
+                last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
+                email='staffmember@example.com', is_staff=True, is_active=True,
+                date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
+            )
+            cls.u4 = User.objects.create(
+                password='', last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
+                email='empty_password@example.com',
+                is_staff=False, is_active=True, date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
+            )
+            cls.u5 = User.objects.create(
+                password='$', last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
+                email='unmanageable_password@example.com', is_staff=False, is_active=True,
+                date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
+            )
+            cls.u6 = User.objects.create(
+                password='foo$bar', last_login=datetime.datetime(2006, 12, 17, 7, 3, 31), is_superuser=False,
+                email='unknown_password@example.com', is_staff=False, is_active=True,
+                date_joined=datetime.datetime(2006, 12, 17, 7, 3, 31)
+            )
 
 
 @override_settings(ROOT_URLCONF='authtools.urls')
 class AuthViewNamedURLTests(AuthViewsTestCaseDataMixin, AuthViewNamedURLTests):
-    if DJANGO_VERSION[:2] < (1, 9):
-        if settings.AUTH_USER_MODEL == 'authtools.User':
-            fixtures = ['authtoolstestdata.json']
-        elif settings.AUTH_USER_MODEL == 'tests.User':
-            fixtures = ['customusertestdata.json']
+    pass
 
 
 class UtilsTest(TestCase):
@@ -210,6 +199,8 @@ class PasswordResetTest(EmailLoginMixin, AuthViewsTestCaseDataMixin, PasswordRes
     test_email_found_custom_from = None
     test_confirm_redirect_custom = None
     test_confirm_redirect_custom_named = None
+    test_confirm_custom_reset_url_token = None
+    test_confirm_custom_reset_url_token_link_redirects_to_set_password_page = None
     # these reference the builtin user model
     test_confirm_invalid_post = None
     test_confirm_display_user_from_form = None
@@ -218,7 +209,7 @@ class PasswordResetTest(EmailLoginMixin, AuthViewsTestCaseDataMixin, PasswordRes
     def assertFormError(self, response, error):
         """Assert that error is found in response.context['form'] errors"""
         form_errors = list(itertools.chain(*response.context['form'].errors.values()))
-        self.assertIn(force_text(error), form_errors)
+        self.assertIn(force_str(error), form_errors)
 
     # test the django 1.5 behavior
     def test_email_not_found_in_friendly_password_reset_form(self):
@@ -372,7 +363,7 @@ class LoginTest(EmailLoginMixin, AuthViewsTestCaseDataMixin, LoginTest):
             nasty_url = '%(url)s?%(next)s=%(bad_url)s' % {
                 'url': login_url,
                 'next': REDIRECT_FIELD_NAME,
-                'bad_url': urlquote(bad_url),
+                'bad_url': quote(bad_url),
             }
             response = self.client.post(nasty_url, {
                 'username': self.default_login,
@@ -392,7 +383,7 @@ class LoginTest(EmailLoginMixin, AuthViewsTestCaseDataMixin, LoginTest):
             safe_url = '%(url)s?%(next)s=%(good_url)s' % {
                 'url': login_url,
                 'next': REDIRECT_FIELD_NAME,
-                'good_url': urlquote(good_url),
+                'good_url': quote(good_url),
             }
             response = self.client.post(safe_url, {
                 'username': self.default_login,
@@ -411,12 +402,12 @@ class LoginTest(EmailLoginMixin, AuthViewsTestCaseDataMixin, LoginTest):
         # Do a GET to establish a CSRF token
         # TestClient isn't used here as we're testing middleware, essentially.
         req = HttpRequest()
-        CsrfViewMiddleware().process_view(req, login_view, (), {})
+        csrf_middleware = CsrfViewMiddleware(login_view)
+        csrf_middleware.process_view(req, login_view, (), {})
         # get_token() triggers CSRF token inclusion in the response
         get_token(req)
-        resp = login_view(req)
-        resp2 = CsrfViewMiddleware().process_response(req, resp)
-        csrf_cookie = resp2.cookies.get(settings.CSRF_COOKIE_NAME, None)
+        resp = csrf_middleware(req)
+        csrf_cookie = resp.cookies.get(settings.CSRF_COOKIE_NAME, None)
         token1 = csrf_cookie.coded_value
 
         # Prepare the POST request
@@ -426,13 +417,12 @@ class LoginTest(EmailLoginMixin, AuthViewsTestCaseDataMixin, LoginTest):
         req.POST = {'username': login, 'password': password, 'csrfmiddlewaretoken': token1}
 
         # Use POST request to log in
-        SessionMiddleware().process_request(req)
-        CsrfViewMiddleware().process_view(req, login_view, (), {})
+        SessionMiddleware(lambda _: None).process_request(req)
+        csrf_middleware.process_view(req, login_view, (), {})
         req.META["SERVER_NAME"] = "testserver"  # Required to have redirect work in login view
         req.META["SERVER_PORT"] = 80
-        resp = login_view(req)
-        resp2 = CsrfViewMiddleware().process_response(req, resp)
-        csrf_cookie = resp2.cookies.get(settings.CSRF_COOKIE_NAME, None)
+        resp = csrf_middleware(req)
+        csrf_cookie = resp.cookies.get(settings.CSRF_COOKIE_NAME, None)
         token2 = csrf_cookie.coded_value
 
         # Check the CSRF token switched
@@ -455,7 +445,7 @@ class LoginTest(EmailLoginMixin, AuthViewsTestCaseDataMixin, LoginTest):
             not_secured_url = '%(url)s?%(next)s=%(next_url)s' % {
                 'url': login_url,
                 'next': REDIRECT_FIELD_NAME,
-                'next_url': urlquote(non_https_next_url),
+                'next_url': quote(non_https_next_url),
             }
             post_data = {
                 'username': self.default_login,
@@ -492,11 +482,7 @@ class DeprecationTest(WarningTestMixin, TestCase):
 
 @override_settings(ROOT_URLCONF='tests.urls')
 class LoginURLSettings(AuthViewsTestCaseDataMixin, LoginURLSettings):
-    if DJANGO_VERSION[:2] < (1, 9):
-        if settings.AUTH_USER_MODEL == 'authtools.User':
-            fixtures = ['authtoolstestdata.json']
-        elif settings.AUTH_USER_MODEL == 'tests.User':
-            fixtures = ['customusertestdata.json']
+    pass
 
 
 @override_settings(ROOT_URLCONF='tests.urls')
@@ -505,7 +491,7 @@ class LogoutTest(EmailLoginMixin, AuthViewsTestCaseDataMixin, LogoutTest):
     test_logout_with_next_page_specified = None
     test_logout_with_custom_redirect_argument = None
     test_logout_with_named_redirect = None
-    test_logout_with_custom_redirect_argument = None
+    test_logout_preserve_language = None
 
     # the built-in tests depend on the django urlpatterns (they reverse
     # django.contrib.auth.views.login)
@@ -520,7 +506,7 @@ class LogoutTest(EmailLoginMixin, AuthViewsTestCaseDataMixin, LogoutTest):
             nasty_url = '%(url)s?%(next)s=%(bad_url)s' % {
                 'url': logout_url,
                 'next': REDIRECT_FIELD_NAME,
-                'bad_url': urlquote(bad_url),
+                'bad_url': quote(bad_url),
             }
             self.login()
             response = self.client.get(nasty_url)
@@ -539,7 +525,7 @@ class LogoutTest(EmailLoginMixin, AuthViewsTestCaseDataMixin, LogoutTest):
             safe_url = '%(url)s?%(next)s=%(good_url)s' % {
                 'url': logout_url,
                 'next': REDIRECT_FIELD_NAME,
-                'good_url': urlquote(good_url),
+                'good_url': quote(good_url),
             }
             self.login()
             response = self.client.get(safe_url)
@@ -570,7 +556,7 @@ class UserCreationFormTest(TestCase):
         form = UserCreationForm(data)
         self.assertFalse(form.is_valid())
         self.assertEqual(form[self.username].errors, [
-            force_text(form.error_messages['duplicate_username']) % {'username': self.username}])
+            force_str(form.error_messages['duplicate_username']) % {'username': self.username}])
 
     def test_password_verification(self):
         # The verification password is incorrect.
@@ -582,13 +568,13 @@ class UserCreationFormTest(TestCase):
         form = UserCreationForm(data)
         self.assertFalse(form.is_valid())
         self.assertEqual(form["password2"].errors,
-                         [force_text(form.error_messages['password_mismatch'])])
+                         [force_str(form.error_messages['password_mismatch'])])
 
     def test_both_passwords(self):
         # One (or both) passwords weren't given
         data = {self.username: 'jsmith'}
         form = UserCreationForm(data)
-        required_error = [force_text(Field.default_error_messages['required'])]
+        required_error = [force_str(Field.default_error_messages['required'])]
         self.assertFalse(form.is_valid())
         self.assertEqual(form['password1'].errors, required_error)
         self.assertEqual(form['password2'].errors, required_error)
